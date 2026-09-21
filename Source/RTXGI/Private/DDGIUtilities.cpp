@@ -105,10 +105,9 @@ void FLatentGPUTimerDDGI::End(FRHICommandListImmediate& RHICmdList)
 	}
 
 	RHICmdList.EndRenderQuery(EndQueries[QueryIndex].GetQuery());
-	// Hint to the RHI to submit commands up to this point to the GPU if possible.  Can help avoid CPU stalls next frame waiting
-	// for these query results on some platforms.
-	RHICmdList.SubmitCommandsHint();
-
+	// UE 5.8 removed SubmitCommandsHint(). Dispatch the pending commands explicitly instead.
+	// When an RHI thread is present, enqueue a fence first so query result polling can verify
+	// that EndRenderQuery has reached the RHI thread.
 	if (IsRunningRHIInSeparateThread())
 	{
 		int32 NumFrames = NumBufferedFrames;
@@ -116,10 +115,10 @@ void FLatentGPUTimerDDGI::End(FRHICommandListImmediate& RHICmdList)
 		{
 			QuerySubmittedFences[Dest] = QuerySubmittedFences[Dest - 1];
 		}
-		// Start an RHI thread fence so we can be sure the RHI thread has processed the EndRenderQuery before we ask for results
 		QuerySubmittedFences[0] = RHICmdList.RHIThreadFence();
-		RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
 	}
+
+	RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
 }
 
 void FLatentGPUTimerDDGI::Release()

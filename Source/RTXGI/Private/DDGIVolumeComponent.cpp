@@ -240,12 +240,12 @@ bool FDDGIVolumeSceneProxy::IntersectsViewFrustum(const FViewInfo& View)
 
 			const FPlane FarPlane(PlaneBasePoint, PlaneNormal);
 			// Derive the view frustum from the view projection matrix, overriding the far plane
-			GetViewFrustumBounds(TransformedViewFrustum, FrustumTransform * View.ViewMatrices.GetViewProjectionMatrix(), FarPlane, true, false);
+			GetViewFrustumBounds(TransformedViewFrustum, FrustumTransform * View.ViewMatrices.GetWorldToClip(), FarPlane, true, false);
 		}
 		else
 		{
 			// Derive the view frustum from the view projection matrix.
-			GetViewFrustumBounds(TransformedViewFrustum, FrustumTransform * View.ViewMatrices.GetViewProjectionMatrix(), false);
+			GetViewFrustumBounds(TransformedViewFrustum, FrustumTransform * View.ViewMatrices.GetWorldToClip(), false);
 		}
 
 		// Test the transformed view frustum against the volume
@@ -562,8 +562,7 @@ void FDDGIVolumeSceneProxy::RenderDiffuseIndirectLight_RenderThread(
 				UpdateTimer.Begin(RHICmdList);
 			});
 #endif
-		RDG_GPU_STAT_SCOPE(GraphBuilder, RTXGI_Update);
-		RDG_EVENT_SCOPE(GraphBuilder, "RTXGI Update");
+		RDG_EVENT_SCOPE_STAT(GraphBuilder, RTXGI_Update, "RTXGI Update");
 		DDGIVolumeUpdate::DDGIUpdatePerFrame_RenderThread(Scene, View, GraphBuilder);
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 		AddPass(GraphBuilder, RDG_EVENT_NAME("RTXGI_UpdateTimer_End"), [](FRHICommandListImmediate& RHICmdList)
@@ -610,8 +609,7 @@ void FDDGIVolumeSceneProxy::RenderDiffuseIndirectLight_RenderThread(
 	FRDGTextureUAVRef LightingPassUAV = GraphBuilder.CreateUAV(LightingPassTex);
 
 	{
-		RDG_GPU_STAT_SCOPE(GraphBuilder, RTXGI_ApplyLighting);
-		RDG_EVENT_SCOPE(GraphBuilder, "RTXGI Apply Lighting");
+		RDG_EVENT_SCOPE_STAT(GraphBuilder, RTXGI_ApplyLighting, "RTXGI Apply Lighting");
 
 		// DDGIVolume and useful metadata
 		struct FProxyEntry
@@ -851,8 +849,7 @@ void FDDGIVolumeSceneProxy::RenderDiffuseIndirectLight_RenderThread(
 
 	if (CVarLightingPassScale.GetValueOnRenderThread() < 1.0f)
 	{
-		RDG_GPU_STAT_SCOPE(GraphBuilder, RTXGI_UpscaleLighting);
-		RDG_EVENT_SCOPE(GraphBuilder, "RTXGI Upscale Lighting");
+		RDG_EVENT_SCOPE_STAT(GraphBuilder, RTXGI_UpscaleLighting, "RTXGI Upscale Lighting");
 
 		// Set parameters for the Upsampler CS
 		//FGlobalShaderMap* GlobalShaderMap = GetGlobalShaderMap(View.GetFeatureLevel());
@@ -1016,11 +1013,8 @@ static bool WaitForDDGITextureReadback_RenderThread(
 
 	while (!Readback.IsReady())
 	{
-		RHICmdList.SubmitCommandsHint();
-		if (IsRunningRHIInSeparateThread())
-		{
-			RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
-		}
+		// Submit the copy without blocking for GPU completion; IsReady() below remains the completion test.
+		RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
 
 		if ((FPlatformTime::Seconds() - StartTime) >= MaxWaitSeconds)
 		{
@@ -1116,7 +1110,7 @@ static void LoadFDDGITexturePixels(FArchive& Ar, FDDGITexturePixels& texturePixe
 			// Create the texture resource
 			FRHITextureCreateDesc CreateInfo = FRHITextureCreateDesc::Create2D(TEXT("DDGITextureLoad"), texturePixels.Desc.Width, texturePixels.Desc.Height, expectedPixelFormat);
 			CreateInfo.AddFlags(TexCreate_ShaderResource);
-			texturePixels.Texture = RHICreateTexture(CreateInfo);
+			texturePixels.Texture = RHICmdList.CreateTexture(CreateInfo);
 
 			if (texturePixels.Pixels.Num() == texturePixels.Desc.Height * texturePixels.Desc.Stride)
 			{

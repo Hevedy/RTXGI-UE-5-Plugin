@@ -47,7 +47,6 @@
 #include "PipelineStateCache.h"
 #include "SceneProxies/SkyLightSceneProxy.h"
 #include "SceneRendering.h"
-#include "RendererPrivate.h" // For internal engine sources if necessary
 #include "RHIResources.h"
 #include "GlobalShader.h"
 #include "RayTracing/RayTracing.h"
@@ -1159,7 +1158,7 @@ void DebugShaderPlatformsDetailed()
     PassParameters->DDGIVolume_IrradianceScalar = FMath::Clamp(CVarDDGIIrradianceScalar.GetValueOnRenderThread(), 0.001f, 1.0f);
 
     PassParameters->CameraPos = static_cast<FVector3f>(View.ViewMatrices.GetViewOrigin());
-    PassParameters->CameraMatrix = static_cast<FMatrix44f>(View.ViewMatrices.GetViewMatrix().Inverse());
+    PassParameters->CameraMatrix = static_cast<FMatrix44f>(View.ViewMatrices.GetViewToWorld());
 
 #if ENGINE_MAJOR_VERSION < 5
     PassParameters->TLAS = View.RayTracingScene.RayTracingSceneSRV;
@@ -1802,6 +1801,11 @@ void DebugShaderPlatformsDetailed()
 
 #if !IS_MONOLITHIC
 
+// UE 5.8 exports these helpers from Renderer (SceneRendering.h). Defining plugin-local
+// copies causes C4273 because the engine declarations carry RENDERER_API dll linkage.
+// Keep the legacy definitions only for pre-5.8 engine branches.
+#if ENGINE_MAJOR_VERSION < 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 8)
+
 bool FViewInfo::HasRayTracingScene() const
 {
 	check(Family);
@@ -1842,6 +1846,8 @@ FRDGBufferSRVRef FViewInfo::GetRayTracingSceneLayerViewChecked(ERayTracingSceneL
 	checkf(Result, TEXT("Ray tracing scene SRV is expected to be created at this point."));
 	return Result;
 }
+
+#endif // UE < 5.8 legacy FViewInfo ray tracing helpers
 
 FRDGBufferUAVRef FViewInfo::GetRayTracingInstanceHitCountUAV(FRDGBuilder& GraphBuilder) const
 {

@@ -293,8 +293,7 @@ void FDDGIVolumeSceneProxy::RenderDiffuseIndirectVisualizations_RenderThread(
 	int mode = static_cast<int>(GetDefault<URTXGIPluginSettings>()->ProbesVisualization);
 	if (mode < 1 || mode > 3) return;
 
-	RDG_GPU_STAT_SCOPE(GraphBuilder, RTXGI_Visualizations);
-	RDG_EVENT_SCOPE(GraphBuilder, "RTXGI Visualizations");
+	RDG_EVENT_SCOPE_STAT(GraphBuilder, RTXGI_Visualizations, "RTXGI Visualizations");
 
 	float probeRadius = GetDefault<URTXGIPluginSettings>()->DebugProbeRadius;
 	float depthScale = GetDefault<URTXGIPluginSettings>()->ProbesDepthScale;
@@ -352,7 +351,7 @@ void FDDGIVolumeSceneProxy::RenderDiffuseIndirectVisualizations_RenderThread(
 		PassParameters->ProbeStates = RegisterExternalTextureWithFallback(GraphBuilder, proxy->ProbesStates, GSystemTextures.BlackDummy);
 		PassParameters->ProbeRadius = probeRadius;
 		PassParameters->DepthScale = depthScale;
-		PassParameters->WorldToClip = static_cast<FMatrix44f>(View.ViewMatrices.GetViewProjectionMatrix());
+		PassParameters->WorldToClip = static_cast<FMatrix44f>(View.ViewMatrices.GetWorldToClip());
 		PassParameters->CameraPosition = static_cast<FVector3f>(View.ViewLocation);
 
 		PassParameters->ShouldUsePreExposure = View.Family->EngineShowFlags.Tonemapper;
